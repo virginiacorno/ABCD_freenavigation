@@ -11,6 +11,9 @@ public class FreeNavigationCamera : MonoBehaviour
     
     public void StartNewConfiguration(int configIndex)
     {
+        //V: test data logging
+        DataLogger.Instance.InitializeWithInfo("TEST_P001", "pilot_study", "001");
+        
         //V: Load the new configuration in reward manager
         rewardManager.LoadConfiguration(configIndex);
         SetupGameplayCameras();

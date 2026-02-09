@@ -7,13 +7,19 @@ public class moveplayer : MonoBehaviour
     public float rotationSpeed = 100f;
 
     public rewardManager rewardManager;
-    public CameraManager cameraManager;  //V: Classic camera mode
-    // public FreeNavigationCamera cameraManager;  //V: Free navigation mode
+    //public CameraManager cameraManager;  //V: Classic camera mode
+    public FreeNavigationCamera cameraManager;  //V: Free navigation mode
+
+    public bool inputEnabled = true; //V: allows to detect key input, turned off at the end of trials when transition screens/resets are called
 
     private Vector3 targetPosition;
     private Quaternion targetRotation;
     private bool isMoving = false;
     private bool isRotating = false;
+    
+    //V: variables to keep track of logging
+    private bool rotationStartLogged = false;
+    private bool movementStartLogged = false;
     
     void Start()
     {
@@ -50,35 +56,54 @@ public class moveplayer : MonoBehaviour
     
     void CheckInput() //V: check keyboard input and set the rotation and movement targets accordingly
     {
-        // New Input System syntax
+        if (!inputEnabled) return; //V: early return if input is disabled
+
         Keyboard keyboard = Keyboard.current;
-        
         if (keyboard == null) return;  // Safety check
+
+        string keyPressed = null;
+        float keyPressTime = DataLogger.Instance.GetCurrentRunTime();
+        Vector3 oldPosition = transform.position;
 
         if (keyboard.upArrowKey.wasPressedThisFrame) //V: up key is the only one allowing to move, the other ones are just controlling rotations
         {
             Vector3 potentialTarget = transform.position + (transform.forward * gridStepSize);
-            if (WithinBounds(potentialTarget)){
+            if (WithinBounds(potentialTarget))
+            {
                 targetPosition = potentialTarget;
                 isMoving = true;
             }
             cameraManager.DisableMiniMap();
+            keyPressed = "up";
         }
         else if (keyboard.downArrowKey.wasPressedThisFrame)
         {
             SetTarget(180f);
             cameraManager.DisableMiniMap();
+            keyPressed = "down";
         }
         else if (keyboard.leftArrowKey.wasPressedThisFrame)
         {
-            SetTarget( -90f);
+            SetTarget(-90f);
             cameraManager.DisableMiniMap();
+            keyPressed = "left";
         }
         else if (keyboard.rightArrowKey.wasPressedThisFrame)
         {
             SetTarget(90f);
             cameraManager.DisableMiniMap();
+            keyPressed = "right";
         }
+
+        if (!string.IsNullOrEmpty(keyPressed))
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+            {
+                {"event_type", "key_press"},
+                {"key_pressed", keyPressed},
+                {"t_curr_run", keyPressTime},
+                {"curr_loc_x", oldPosition.x},
+                {"curr_loc_y", oldPosition.z}
+            });
     }
 
     void SetTarget(float relativeYRotation) //V: calculate rotation target relative to current position and set isRotating to true
@@ -92,6 +117,18 @@ public class moveplayer : MonoBehaviour
 
     void RotateToTarget()
     {
+        if (!rotationStartLogged) //V: prevents from logging at each single frame
+        {
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+            {
+                {"event_type", "rotation_start"},
+                {"from_rotation", transform.rotation.eulerAngles.y},
+                {"target_rotation", targetRotation.eulerAngles.y},
+                {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+            });
+            rotationStartLogged = true;
+        }
+
         transform.rotation = Quaternion.RotateTowards(
             transform.rotation,
             targetRotation,
@@ -104,6 +141,14 @@ public class moveplayer : MonoBehaviour
             float y = Mathf.Round(targetRotation.eulerAngles.y / 90f) * 90f;
             transform.rotation = Quaternion.Euler(0, y, 0);
             isRotating = false;
+
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+            {
+                {"event_type", "rotation_complete"},
+                {"final_rotation", transform.rotation.eulerAngles.y},
+                {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+            });
+            rotationStartLogged = false;
         }
     }
 
@@ -123,6 +168,20 @@ public class moveplayer : MonoBehaviour
     
     void MoveToTarget()
     {
+        if (!movementStartLogged)
+        {
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+            {
+                {"event_type", "movement_start"},
+                {"from_x", transform.position.x},
+                {"from_z", transform.position.z},
+                {"target_x", targetPosition.x},
+                {"target_z", targetPosition.z},
+                {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+            });
+            movementStartLogged = true;
+        }
+
         transform.position = Vector3.MoveTowards(
             transform.position,
             targetPosition,
@@ -133,6 +192,15 @@ public class moveplayer : MonoBehaviour
         {
             transform.position = targetPosition;
             isMoving = false;
+
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+            {
+                {"event_type", "movement_complete"},
+                {"final_x", transform.position.x},
+                {"final_z", transform.position.z},
+                {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+            });
+            movementStartLogged = false;
 
             rewardManager.RewardFound(transform.position);
         }

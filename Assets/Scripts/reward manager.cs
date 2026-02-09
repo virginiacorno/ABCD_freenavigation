@@ -50,8 +50,8 @@ public class rewardManager : MonoBehaviour
     private int nextRewardIdx = 0;
     private int repsCompleted = 0;
     private int lastShownRewardIdx = -1;
-    private bool isFirstRepofConfig = true;
     public GameObject cueObject;
+    public moveplayer player;
 
     public bool NewRewLocations() //V: checks if the reward locations have changed to call show rewards (needed in ABC version)
     {
@@ -129,7 +129,9 @@ public class rewardManager : MonoBehaviour
         if (index >= 0 && index < configData.configurations.Count)
         {
             currentConfigIdx = index;
-            
+            nextRewardIdx = 0;
+            lastShownRewardIdx = -1;
+
             // Destroy old rewards
             if (currentRewardObjects != null)
             {
@@ -149,8 +151,9 @@ public class rewardManager : MonoBehaviour
                 Vector3 worldPos = positions[i].ToVector3();
                 currentRewardObjects[i] = Instantiate(rewardPrefab, worldPos, Quaternion.identity);
                 currentRewardObjects[i].name = $"Reward_{(char)('A' + i)}_{configData.configurations[index].configName}";
-                currentRewardObjects[i].GetComponent<Renderer>().enabled = false;
-                
+                //currentRewardObjects[i].GetComponent<Renderer>().enabled = false;
+                currentRewardObjects[i].SetActive(false);
+
                 Debug.Log($"Reward {(char)('A' + i)} at world position: {worldPos}");
             }
             
@@ -168,12 +171,13 @@ public class rewardManager : MonoBehaviour
         return configData.configurations[currentConfigIdx].configName;
     }
     
-    public bool RewardFound(Vector3 playerPosition) //V: public so can be accessed by player movement script
+    public bool RewardFound(Vector3 playerPosition)
     {
         Debug.Log($"Player position: {playerPosition}");
         Debug.Log($"nextRewardIdx: {nextRewardIdx}");
         int rewardsToCollect = configData.configurations[currentConfigIdx].SequenceLength;
-        if (nextRewardIdx >= rewardsToCollect) //V: stop checking if we have already found the last reward
+        
+        if (nextRewardIdx >= rewardsToCollect)
         {
             return false;
         }
@@ -181,60 +185,103 @@ public class rewardManager : MonoBehaviour
         GameObject currReward = currentRewardObjects[nextRewardIdx];
         float distance = Vector3.Distance(playerPosition, currReward.transform.position);
 
-        //V: Debug - show reward position and distance 
         Debug.Log($"Reward {nextRewardIdx} position: {currReward.transform.position}, Distance: {distance}");
 
-        if (distance < 0.01f)
+        //V: check for space bar presses
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
+            bool atRewardLocation = (distance < 0.01f);
+            
+            // log all space bar presses
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
             {
-                Debug.Log("spacebar was pressed");
+                {"event_type", "reward_check"},
+                {"key_pressed", "space"},
+                {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()},
+                {"curr_loc_x", playerPosition.x},
+                {"curr_loc_y", playerPosition.z},
+                {"curr_rew_x", currReward.transform.position.x},
+                {"curr_rew_y", currReward.transform.position.z},
+                {"state", (char)('A' + nextRewardIdx)},
+                {"type", configData.configurations[currentConfigIdx].configName},
+                {"distance_to_reward", distance},
+                {"found_reward", atRewardLocation}
+            });
+            
+            // Only process reward if at correct location
+            if (atRewardLocation)
+            {
+                Debug.Log("spacebar was pressed at reward location");
                 var config = configData.configurations[currentConfigIdx];
                 int rewardCount = config.SequenceLength;
                 Debug.Log($"Reward {nextRewardIdx + 1}/{rewardCount} found!");
+                
                 ShowReward(nextRewardIdx);
                 lastShownRewardIdx = nextRewardIdx;
-
+                
                 nextRewardIdx++;
-                if (config.IsABCType && nextRewardIdx == 3 && repsCompleted < configData.trialsPerConfig - 1) //V: if we are in the ABC configuration and we have just found reward C and are not in the last repetition
+                
+                if (config.IsABCType && nextRewardIdx == 3 && (repsCompleted + 1 < configData.trialsPerConfig))
                 {
                     if (cueObject != null)
                     {
                         cueObject.SetActive(true);
+                        
+                        DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+                        {
+                            {"event_type", "cue_displayed"},
+                            {"cue_displayed", true},
+                            {"cue_time", DataLogger.Instance.GetCurrentRunTime()},
+                            {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+                        });
+                        
                         Debug.Log("Cue displayed - ABC sequence at C");
                     }
                 }
                 
-                if (nextRewardIdx >= rewardsToCollect) //V: check if we have just found the last reward
+                if (nextRewardIdx >= rewardsToCollect)
                 {
+                    player.inputEnabled = false;
                     repsCompleted++;
-                    Debug.Log($"Last reward found! Trial {repsCompleted}/3 complete");
-                    CompleteTrial();
+
+                    DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+                    {
+                        {"event_type", "trial_complete"},
+                        {"config_index", currentConfigIdx},
+                        {"repetition_completed", repsCompleted},
+                        {"total_repetitions", configData.trialsPerConfig},
+                        {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+                    });
+
+                    Invoke("CompleteTrial", 0.5f);
                 }
                 
                 return true;  
             }
-            return false;
-        }
-        else
-        {
-            if (lastShownRewardIdx >= 0)
+            else
             {
-                GameObject lastReward = currentRewardObjects[lastShownRewardIdx];
-                float distanceToLast = Vector3.Distance(playerPosition, lastReward.transform.position);
-
-                // hide reward only once player has actually left it
-                if (distanceToLast > 0.05f) // adjust threshold if needed
-                {
-                    HideReward(lastShownRewardIdx);
-                    lastShownRewardIdx = -1;
-                }
+                Debug.Log($"Space pressed but not at reward. Distance: {distance}");
+                return false;
             }
         }
-        return false;
-    }
         
+        // Handle hiding rewards when player moves away
+        if (lastShownRewardIdx >= 0)
+        {
+            GameObject lastReward = currentRewardObjects[lastShownRewardIdx];
+            float distanceToLast = Vector3.Distance(playerPosition, lastReward.transform.position);
+
+            if (distanceToLast > 0.05f)
+            {
+                HideReward(lastShownRewardIdx);
+                lastShownRewardIdx = -1;
+            }
+        }
+        
+        return false;
+    }    
+
     void CompleteTrial() //V: check if we have completed all repetitions of the current trial and switch to next configuration if appropriate
     {
         // Cue is hidden in ResetTrial() or StartNextConfigForFreeNav() after delay
@@ -246,7 +293,6 @@ public class rewardManager : MonoBehaviour
                 Debug.Log($"{configData.configurations[currentConfigIdx].configName} complete!");
                 currentConfigIdx++;
                 repsCompleted = 0;
-                isFirstRepofConfig = true;
 
                 CameraManager camManager = FindFirstObjectByType<CameraManager>();
                 FreeNavigationCamera freeNavCam = FindFirstObjectByType<FreeNavigationCamera>();
@@ -255,12 +301,12 @@ public class rewardManager : MonoBehaviour
                 {
                     if (NewRewLocations())
                     {
-                        Invoke("StartNextConfiguration", 2f); //V: have top down view of the next configuration start a few seconds after trial is completed
+                        instructionManager.NewSequenceInstructions(); //V: have top down view of the next configuration start a few seconds after trial is completed
                     }
                     else
                     {
-                        Invoke("LoadConfiguration", 2f);
-                        Invoke("ResetTrial", 2f);
+                        Invoke("LoadConfiguration", 1f);
+                        Invoke("ResetTrial", 1f);
                     }
                 } 
                 else if (freeNavCam != null && freeNavCam.enabled)
@@ -280,12 +326,12 @@ public class rewardManager : MonoBehaviour
         else
         {
             Debug.Log($"Moving on to repetition {repsCompleted + 1}/3");
-            Invoke("ResetTrial", 2f);
+            Invoke("ResetTrial", 0.5f);
         }
     }
 
 
-    void StartNextConfiguration()
+    public void StartNextConfiguration()
     {
         FindFirstObjectByType<CameraManager>().StartNewConfiguration(currentConfigIdx);
     }
@@ -296,6 +342,19 @@ public class rewardManager : MonoBehaviour
         HideAllRewards();
         nextRewardIdx = 0;
         lastShownRewardIdx = -1;
+
+        player.inputEnabled = true;
+
+        DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+        {
+            {"event_type", "trial_start"},
+            {"config_index", currentConfigIdx},
+            {"config_name", GetCurrentConfigName()},
+            {"trial_type", configData.configurations[currentConfigIdx].IsABCType ? "ABC" : "ABCD"},
+            {"sequence", configData.configurations[currentConfigIdx].IsABCType ? "A-B-C" : "A-B-C-D"},
+            {"repetition", repsCompleted},
+            {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+        });
         
         Debug.Log($"Starting {configData.configurations[currentConfigIdx].configName}");
     }
@@ -306,7 +365,7 @@ public class rewardManager : MonoBehaviour
         HideCue();
         nextRewardIdx = 0;
         lastShownRewardIdx = -1;
-        isFirstRepofConfig = false;
+        player.inputEnabled = true;
 
         // Player stays where they are (at last reward D or C) - no teleportation needed
 
@@ -320,11 +379,28 @@ public class rewardManager : MonoBehaviour
         if (index >= 0 && index < currentRewardObjects.Length && currentRewardObjects[index] != null)
         {
             Debug.Log($"Showing reward at index {index}, name: {currentRewardObjects[index].name}");
-            Debug.Log($"Renderer before: {currentRewardObjects[index].GetComponent<Renderer>().enabled}");
+            //Debug.Log($"Renderer before: {currentRewardObjects[index].GetComponent<Renderer>().enabled}");
+
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+            {
+                {"event_type", "reward"},
+                {"reward_onset_time", DataLogger.Instance.GetCurrentRunTime()},
+                {"rew_loc_x", currentRewardObjects[index].transform.position.x},
+                {"rew_loc_y", currentRewardObjects[index].transform.position.z},
+                {"reward_letter", (char)('A' + index)},
+                {"reward_index", index},
+                {"config_index", currentConfigIdx},
+                {"state", (char)('A' + index)},
+                {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+            });
             
-            currentRewardObjects[index].GetComponent<Renderer>().enabled = true;
+            //currentRewardObjects[index].GetComponent<Renderer>().enabled = true;
+            currentRewardObjects[index].SetActive(true);
+            Vector3 dir = -player.transform.forward;
+            dir.y = 0;
+            currentRewardObjects[index].transform.rotation = Quaternion.LookRotation(dir);
             
-            Debug.Log($"Renderer after: {currentRewardObjects[index].GetComponent<Renderer>().enabled}");
+            //Debug.Log($"Renderer after: {currentRewardObjects[index].GetComponent<Renderer>().enabled}");
         }
         else
         {
@@ -336,7 +412,17 @@ public class rewardManager : MonoBehaviour
     {
         if (index >= 0 && index < currentRewardObjects.Length && currentRewardObjects[index] != null)
         {
-            currentRewardObjects[index].GetComponent<Renderer>().enabled = false;
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+            {
+                {"event_type", "reward_offset"},
+                {"reward_offset_time", DataLogger.Instance.GetCurrentRunTime()},
+                {"reward_letter", (char)('A' + index)},
+                {"reward_index", index},
+                {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+            });
+
+            //currentRewardObjects[index].GetComponent<Renderer>().enabled = false;
+            currentRewardObjects[index].SetActive(false);
         }
     }
     
@@ -348,7 +434,8 @@ public class rewardManager : MonoBehaviour
             {
                 if (reward != null)
                 {
-                    reward.GetComponent<Renderer>().enabled = false;
+                    //reward.GetComponent<Renderer>().enabled = false;
+                    reward.SetActive(false);
                 }
             }
         }
@@ -365,15 +452,7 @@ public class rewardManager : MonoBehaviour
     public Vector3 GetStartPosition()
     {
         var config = configData.configurations[currentConfigIdx];
-
-        if (isFirstRepofConfig)
-        {
-            return config.rewardPositions[3].ToVector3(); //V: get the position of reward D
-        }
-        else
-        {
-            int lastRewardIdx = config.SequenceLength - 1;
-            return config.rewardPositions[lastRewardIdx].ToVector3(); //V: get the position of the last visited reward
-        }
+        int lastRewardIdx = config.SequenceLength - 1; //V: C (index 2) for ABC, D (index 3) for ABCD
+        return config.rewardPositions[lastRewardIdx].ToVector3();
     }
 }

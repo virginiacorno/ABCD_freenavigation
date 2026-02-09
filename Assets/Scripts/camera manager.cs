@@ -24,6 +24,9 @@ public class CameraManager : MonoBehaviour
     
     void Start()
     {
+        //V: test data logging
+        DataLogger.Instance.InitializeWithInfo("TEST_P001", "pilot_study", "001");
+
         //V: Initialize timing arrays
         rewardDisplayTime = new float[] {1.5f, 0.75f};
         pauseBetweenRewards = new float[] {0.5f, 0.25f};
@@ -37,6 +40,15 @@ public class CameraManager : MonoBehaviour
     {
         //V: Load the new configuration in reward manager
         rewardManager.LoadConfiguration(configIndex);
+
+        //V: log start of the configuration
+        DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+        {
+            {"event_type", "configuration_start"},
+            {"config_index", configIndex},
+            {"config_name", rewardManager.GetCurrentConfigName()},
+            {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+        });
         
         //V: Hide player and disable movement initially
         player.GetComponent<Renderer>().enabled = false;
@@ -74,35 +86,77 @@ public class CameraManager : MonoBehaviour
     
     IEnumerator ShowRewardSequence()
     {
+        DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+        {
+            {"event_type", "memorization_start"},
+            {"config_name", rewardManager.GetCurrentConfigName()},
+            {"repetitions", memorizationRepetitions},
+            {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+        });
+
         //V: Show sequence multiple times
         for (int repetition = 0; repetition < memorizationRepetitions; repetition++)
         {
             Debug.Log($"Showing sequence {repetition + 1}/{memorizationRepetitions}");
-            
+            DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+            {
+                {"event_type", "repetition_start"},
+                {"repetition_number", repetition},
+                {"display_time", rewardDisplayTime[repetition]},
+                {"pause_time", pauseBetweenRewards[repetition]},
+                {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+            });
+
             //V: Show each of the 4 rewards in order
             for (int i = 0; i < 4; i++)
             {
+                // Log when reward appears
+                DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+                {
+                    {"event_type", "reward_onset"},
+                    {"reward_letter", (char)('A' + i)},
+                    {"reward_index", i},
+                    {"repetition_number", repetition},
+                    {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+                });
+
                 rewardManager.ShowReward(i);
                 Debug.Log($"Reward {i + 1}/4");
-                
+
                 yield return new WaitForSeconds(rewardDisplayTime[repetition]);
-                
+
+                // Log when reward disappears
+                DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+                {
+                    {"event_type", "reward_offset"},
+                    {"reward_letter", (char)('A' + i)},
+                    {"reward_index", i},
+                    {"repetition_number", repetition},
+                    {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+                });
+
                 rewardManager.HideReward(i);
-                
+
                 yield return new WaitForSeconds(pauseBetweenRewards[repetition]);
             }
-            
+
             //V: Pause between repetitions (but not after the last one)
             if (repetition < memorizationRepetitions - 1)
             {
                 yield return new WaitForSeconds(pauseBetweenSeq);
             }
         }
-        
+
         Debug.Log("Memorization complete! Starting game...");
-        
+
+        DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+        {
+            {"event_type", "memorization_complete"},
+            {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+        });
+
         yield return new WaitForSeconds(1f);
-        
+
         //V: Start gameplay phase
         StartGamePhase();
     }
@@ -113,6 +167,16 @@ public class CameraManager : MonoBehaviour
         
         player.GetComponent<Renderer>().enabled = true;
         player.GetComponent<moveplayer>().enabled = true;
+        player.GetComponent<moveplayer>().inputEnabled = true;
+
+        DataLogger.Instance.LogEvent(new System.Collections.Generic.Dictionary<string, object>
+        {
+            {"event_type", "game_phase_start"},
+            {"start_loc_x", player.transform.position.x},
+            {"start_loc_y", player.transform.position.z},
+            {"config_name", rewardManager.GetCurrentConfigName()},
+            {"t_curr_run", DataLogger.Instance.GetCurrentRunTime()}
+        });
         
         Debug.Log("Find the rewards in order: A → B → C → D");
     }

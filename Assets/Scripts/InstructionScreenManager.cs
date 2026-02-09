@@ -2,8 +2,8 @@ using UnityEngine;
 
 public class InstructionScreenManager : MonoBehaviour
 {
-    // public FreeNavigationCamera cameraManager;
-    public CameraManager cameraManager;
+    public FreeNavigationCamera cameraManager;
+    //public CameraManager cameraManager;
     public rewardManager rewardManager;
     public GameObject instructionPanel;
     public GameObject newSeqPanel; //V: screen signalling sequence change
@@ -37,6 +37,7 @@ public class InstructionScreenManager : MonoBehaviour
 
     public void NewSequenceInstructions()
     {
+        
         Debug.Log("NewSequenceInstructions() called");
         newSeqPanel.SetActive(true);
         Time.timeScale = 0f;
@@ -47,7 +48,17 @@ public class InstructionScreenManager : MonoBehaviour
         instructionPanel.SetActive(false);
         newSeqPanel.SetActive(false);
         Time.timeScale = 1f; //V: resume the game
-        rewardManager.StartNextConfigForFreeNav();
+        CameraManager camManager = FindFirstObjectByType<CameraManager>();
+        FreeNavigationCamera freeNavCam = FindFirstObjectByType<FreeNavigationCamera>();
+
+        if (camManager != null && camManager.enabled)
+        {
+            rewardManager.StartNextConfiguration();
+            
+        } else if (freeNavCam != null && freeNavCam.enabled)
+        {
+            rewardManager.StartNextConfigForFreeNav();
+        }
     }
 
     public void EndScreen()
