@@ -4,8 +4,6 @@
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
-[Bb]uild/
-[Bb]uilds/
 [Ll]ogs/
 [Uu]ser[Ss]ettings/
 
@@ -84,8 +82,6 @@ Desktop.ini
 Library/
 Temp/
 Obj/
-Build/
-Builds/
 Logs/
 UserSettings/
 
