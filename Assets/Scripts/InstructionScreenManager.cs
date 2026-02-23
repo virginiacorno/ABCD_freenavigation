@@ -54,10 +54,10 @@ public class InstructionScreenManager : MonoBehaviour
         if (camManager != null && camManager.enabled)
         {
             rewardManager.StartNextConfiguration();
-            
+
         } else if (freeNavCam != null && freeNavCam.enabled)
         {
-            rewardManager.StartNextConfigForFreeNav();
+            cameraManager.StartCameraTransition();
         }
     }
 

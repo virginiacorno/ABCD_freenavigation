@@ -58,6 +58,8 @@ public class moveplayer : MonoBehaviour
     {
         transform.position = newPosition;
         targetPosition = newPosition;
+        transform.rotation = Quaternion.identity; //V: reset to initial facing direction (forward along +Z)
+        targetRotation = Quaternion.identity;
         isMoving = false;
         isRotating = false;
     }

@@ -166,6 +166,8 @@ public class rewardManager : MonoBehaviour
             }
             
             Debug.Log($"Loaded {configData.configurations[index].configName}");
+
+            player.SetPosition(GetStartPosition());
         }
     }
     
@@ -351,6 +353,7 @@ public class rewardManager : MonoBehaviour
         nextRewardIdx = 0;
         lastShownRewardIdx = -1;
 
+        player.cameraManager.SetupGameplayCameras();
         player.inputEnabled = true;
 
         LogData(new System.Collections.Generic.Dictionary<string, object>
