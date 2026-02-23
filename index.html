@@ -4,25 +4,14 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | ABCD_unity</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
+    <style>
+      * { padding: 0; border: 0; margin: 0; }
+      html, body { width: 100%; height: 100%; overflow: hidden; }
+      #unity-canvas { width: 100%; height: 100%; position: fixed; top: 0; left: 0; background: #231F20; }
+    </style>
   </head>
   <body>
-    <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
-        </div>
-      </div>
-      <div id="unity-warning"> </div>
-      <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
-        <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">ABCD_unity</div>
-      </div>
-    </div>
+    <canvas id="unity-canvas" width=1920 height=1080 tabindex="-1"></canvas>
 
     <script>
     /* Early shim: provides SendDataToJS before Unity module loads.
@@ -52,74 +41,32 @@
     })();
     </script>
 
+    <script src="Build/ABCD_git.loader.js"></script>
     <script>
-      var canvas = document.querySelector("#unity-canvas");
-      var unityInstance = null; // globally accessible for postMessage handler
-
-      function unityShowBanner(msg, type) {
-        var warningBanner = document.querySelector("#unity-warning");
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
-        updateBannerVisibility();
-      }
-
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/ABCD_git.loader.js";
-      var config = {
-        arguments: [],
-        dataUrl: buildUrl + "/ABCD_git.data",
-        frameworkUrl: buildUrl + "/ABCD_git.framework.js",
-        codeUrl: buildUrl + "/ABCD_git.wasm",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "DefaultCompany",
-        productName: "ABCD_unity",
-        productVersion: "0.1.0",
-        showBanner: unityShowBanner,
-      };
-
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
         var meta = document.createElement('meta');
         meta.name = 'viewport';
         meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
         document.getElementsByTagName('head')[0].appendChild(meta);
-        document.querySelector("#unity-container").className = "unity-mobile";
-        canvas.className = "unity-mobile";
-      } else {
-        canvas.style.width = "960px";
-        canvas.style.height = "600px";
       }
 
-      document.querySelector("#unity-loading-bar").style.display = "block";
+      var unityInstance = null;
 
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
-        }).then((instance) => {
-          unityInstance = instance;
-          console.log('[Unity] Instance ready');
-
-          document.querySelector("#unity-loading-bar").style.display = "none";
-          document.querySelector("#unity-fullscreen-button").onclick = () => {
-            instance.SetFullscreen(1);
-          };
-        }).catch((message) => {
-          alert(message);
-        });
-      };
+      createUnityInstance(document.querySelector("#unity-canvas"), {
+        arguments: [],
+        dataUrl: "Build/ABCD_git.data",
+        frameworkUrl: "Build/ABCD_git.framework.js",
+        codeUrl: "Build/ABCD_git.wasm",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "ABCD_unity",
+        productVersion: "0.1.0",
+      }).then((instance) => {
+        unityInstance = instance;
+        console.log('[Unity] Instance ready');
+      }).catch((message) => {
+        alert(message);
+      });
 
       /* === PostMessage handler: receive participant info from Pavlovia parent === */
       window.addEventListener('message', function(event) {
@@ -191,8 +138,6 @@
           }
         };
       })();
-
-      document.body.appendChild(script);
     </script>
   </body>
 </html>
